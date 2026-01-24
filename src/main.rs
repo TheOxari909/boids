@@ -47,19 +47,26 @@ async fn main() {
         if is_key_pressed(KeyCode::Escape) {
             break;
         }
-	
-	for boid in &mut boids {
+
+        for boid in &mut boids {
             boid.position += boid.velocity;
 
-            if boid.position.x > screen_width() { boid.position.x = 0.0; }
-            if boid.position.x < 0.0 { boid.position.x = screen_width(); }
-            if boid.position.y > screen_height() { boid.position.y = 0.0; }
-            if boid.position.y < 0.0 { boid.position.y = screen_height(); }
-	}
-	
+            if boid.position.x > screen_width() {
+                boid.position.x = 0.0;
+            }
+            if boid.position.x < 0.0 {
+                boid.position.x = screen_width();
+            }
+            if boid.position.y > screen_height() {
+                boid.position.y = 0.0;
+            }
+            if boid.position.y < 0.0 {
+                boid.position.y = screen_height();
+            }
+        }
+
         for boid in &boids {
-            let angle =
-                boid.velocity.y.atan2(boid.velocity.x) + std::f32::consts::FRAC_PI_2;
+            let angle = boid.velocity.y.atan2(boid.velocity.x) + std::f32::consts::FRAC_PI_2;
             let v1 = boid.position;
             let v2 = rotate_around(Vec2::new(v1.x + 5.0, v1.y + 15.0), v1, angle);
             let v3 = rotate_around(Vec2::new(v1.x - 5.0, v1.y + 15.0), v1, angle);
