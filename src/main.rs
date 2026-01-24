@@ -2,9 +2,17 @@ extern crate rand;
 use macroquad::prelude::*;
 use rand::prelude::*;
 
+const MAX_SPEED: f32 = 2.0;
+const SEPARATION_WEIGHT: f32 = 1.5;
+const ALIGNMENT_WEIGHT: f32 = 1.0;
+const COHESION_WEIGHT: f32 = 1.0;
+const PERCEPTION_RADIUS: f32 = 50.0;
+
+#[derive(Clone)]
 struct Boid {
     position: Vec2,
     velocity: Vec2,
+    acceleration: Vec2,
 }
 
 impl Boid {
@@ -12,18 +20,59 @@ impl Boid {
         Boid {
             position: pos,
             velocity: vel,
+            acceleration: Vec2::ZERO,
         }
     }
-}
 
-fn rotate_around(p: Vec2, pivot: Vec2, angle_rad: f32) -> Vec2 {
-    let translated = p - pivot;
-    let rotated = Vec2::new(
-        translated.x * angle_rad.cos() - translated.y * angle_rad.sin(),
-        translated.x * angle_rad.sin() + translated.y * angle_rad.cos(),
-    );
+    fn calculate_separation(&self, boids: &[Boid]) -> Vec2 {
+        // Implementation here
+        Vec2::new(0.0, 0.0)
+    }
 
-    rotated + pivot
+    fn calculate_alignment(&self, boids: &[Boid]) -> Vec2 {
+        // Implementation here
+        Vec2::new(0.0, 0.0)
+    }
+
+    fn calculate_cohesion(&self, boids: &[Boid]) -> Vec2 {
+        // Implementation here
+        Vec2::new(0.0, 0.0)
+    }
+
+    fn update(&mut self, dt: f32, snapshot: &[Boid]) {
+        let sepration = self.calculate_separation(snapshot);
+        let alignemt = self.calculate_alignment(snapshot);
+        let cohesion = self.calculate_cohesion(snapshot);
+
+        self.velocity += self.acceleration * dt * 60.0;
+        self.velocity = self.velocity.clamp_length_max(MAX_SPEED);
+        self.position += self.velocity * dt * 60.0;
+        self.acceleration = Vec2::ZERO; // Reset acceleration every frame
+
+        if self.position.x > screen_width() {
+            self.position.x = 0.0;
+        }
+        if self.position.x < 0.0 {
+            self.position.x = screen_width();
+        }
+        if self.position.y > screen_height() {
+            self.position.y = 0.0;
+        }
+        if self.position.y < 0.0 {
+            self.position.y = screen_height();
+        }
+    }
+
+    fn draw(&self) {
+        let angle = self.velocity.y.atan2(self.velocity.x) + std::f32::consts::FRAC_PI_2;
+        let p = self.position;
+
+        let v1 = p + vec2(0.0, -10.0).rotate(vec2(angle.cos(), angle.sin()));
+        let v2 = p + vec2(-5.0, 5.0).rotate(vec2(angle.cos(), angle.sin()));
+        let v3 = p + vec2(5.0, 5.0).rotate(vec2(angle.cos(), angle.sin()));
+
+        draw_triangle(v1, v2, v3, DARKGREEN);
+    }
 }
 
 #[macroquad::main("Boids")]
@@ -32,46 +81,28 @@ async fn main() {
 
     let mut boids = vec![];
 
-    for _ in 0..200 {
+    for _ in 0..100 {
         let x: f32 = rng.random_range(0.0..screen_width());
         let y: f32 = rng.random_range(0.0..screen_height());
         boids.push(Boid::new(
             vec2(x, y),
-            vec2(rng.random_range(-1.0..1.0), rng.random_range(-1.0..1.0)),
+            vec2(rng.random_range(-1.0..1.0), rng.random_range(-1.0..1.0)).normalize(),
         ));
     }
 
     loop {
         clear_background(WHITE);
+        let delta = get_frame_time();
 
         if is_key_pressed(KeyCode::Escape) {
             break;
         }
 
+        let snapshot = boids.clone();
+
         for boid in &mut boids {
-            boid.position += boid.velocity;
-
-            if boid.position.x > screen_width() {
-                boid.position.x = 0.0;
-            }
-            if boid.position.x < 0.0 {
-                boid.position.x = screen_width();
-            }
-            if boid.position.y > screen_height() {
-                boid.position.y = 0.0;
-            }
-            if boid.position.y < 0.0 {
-                boid.position.y = screen_height();
-            }
-        }
-
-        for boid in &boids {
-            let angle = boid.velocity.y.atan2(boid.velocity.x) + std::f32::consts::FRAC_PI_2;
-            let v1 = boid.position;
-            let v2 = rotate_around(Vec2::new(v1.x + 5.0, v1.y + 15.0), v1, angle);
-            let v3 = rotate_around(Vec2::new(v1.x - 5.0, v1.y + 15.0), v1, angle);
-
-            draw_triangle(v1, v2, v3, DARKGREEN);
+            boid.update(delta, &snapshot);
+            boid.draw();
         }
 
         next_frame().await;
