@@ -2,14 +2,17 @@ extern crate rand;
 use macroquad::prelude::*;
 use rand::prelude::*;
 
-const MAX_SPEED: f32 = 10.0;
-const MAX_FORCE: f32 = 50.0;
-const DESIRED_SPEED: f32 = 7.0;
-const SEPARATION_WEIGHT: f32 = 15.0;
+const MAX_SPEED: f32 = 200.0;
+const MAX_FORCE: f32 = 100.0;
+
+const SEPARATION_WEIGHT: f32 = 1.5;
 const ALIGNMENT_WEIGHT: f32 = 1.0;
-const COHESION_WEIGHT: f32 = 10.0;
-const PERCEPTION_RADIUS: f32 = 75.0;
-const SIM_SPEED: f32 = 20.0;
+const COHESION_WEIGHT: f32 = 1.0;
+
+const SEPARATION_RADIUS: f32 = 70.0;
+const PERCEPTION_RADIUS: f32 = 100.0;
+
+const SIM_SPEED: f32 = 1.0;
 
 #[derive(Clone)]
 struct Boid {
@@ -25,71 +28,89 @@ impl Boid {
         }
     }
 
-    fn calculate_separation(&self, snapshot: &Boid) -> Vec2 {
-        let radius2 = PERCEPTION_RADIUS * PERCEPTION_RADIUS;
-
-        let delta = self.position - snapshot.position;
-        let dist2 = delta.length_squared();
-        if dist2 == 0.0 || dist2 > radius2 {
-            return Vec2::ZERO;
-        }
-
-        delta.normalize()
-    }
-
-    fn calculate_alignment(&self, boids: &[Boid]) -> Vec2 {
+    fn calculate_separation(&self, snapshot: &[Boid]) -> Vec2 {
         let mut count = 0;
-        let mut sum_vel = Vec2::ZERO;
+        let mut steer = Vec2::ZERO;
 
-        for boid in boids {
-            let dist = self.position.distance(boid.position);
-            if dist > 0.0 && dist < PERCEPTION_RADIUS {
-                sum_vel += boid.velocity;
+        for other in snapshot {
+            let delta = self.position - other.position;
+            let dist = delta.length();
+
+            if dist > 0.0 && dist < SEPARATION_RADIUS {
+                steer -= delta.normalize();
                 count += 1;
             }
         }
+
         if count > 0 {
-            let average_vel = sum_vel / count as f32;
-            return average_vel - self.velocity;
+            return steer;
+        }
+
+        Vec2::ZERO
+    }
+
+    fn calculate_alignment(&self, boids: &[Boid]) -> Vec2 {
+        let mut count = 0.0;
+        let mut vel_avg = Vec2::ZERO;
+
+        for other in boids {
+            let dist = self.position.distance(other.position);
+
+            if dist > SEPARATION_RADIUS && dist < PERCEPTION_RADIUS {
+                vel_avg += other.velocity;
+                count += 1.0;
+            }
+        }
+
+        if count > 0.0 {
+            vel_avg.x /= count;
+            vel_avg.y /= count;
+            return vel_avg;
         }
 
         Vec2::ZERO
     }
 
     fn calculate_cohesion(&self, boids: &[Boid]) -> Vec2 {
-        // Implementation here
-        Vec2::new(0.0, 0.0)
+        let mut count = 0.0;
+        let mut pos_avg = Vec2::ZERO;
+
+        for other in boids {
+            let dist = self.position.distance(other.position);
+
+            if dist > SEPARATION_RADIUS && dist < PERCEPTION_RADIUS {
+                pos_avg += other.position;
+                count += 1.0;
+            }
+        }
+
+        if count > 0.0 {
+            pos_avg.x /= count;
+            pos_avg.y /= count;
+            return pos_avg;
+        }
+
+        Vec2::ZERO
     }
 
     fn update(&mut self, dt: f32, snapshot: &[Boid]) {
-        let mut separation = Vec2::ZERO;
-        let mut alignment = Vec2::ZERO;
-        let mut cohesion = Vec2::ZERO;
-
-        for boid in snapshot {
-            if std::ptr::eq(self, boid) {
-                continue;
-            }
-            separation += self.calculate_separation(boid);
-        }
-        alignment = self.calculate_alignment(snapshot);
-        cohesion = self.calculate_cohesion(snapshot);
+        let separation = self.calculate_separation(snapshot);
+        let alignment = self.calculate_alignment(snapshot);
+        let cohesion = self.calculate_cohesion(snapshot);
 
         // Steering force & acceleration
         let steering = (separation * SEPARATION_WEIGHT)
             + (alignment * ALIGNMENT_WEIGHT)
             + (cohesion * COHESION_WEIGHT);
-        self.velocity += steering.clamp_length_max(MAX_FORCE) * dt;
-
-        // Speed limit
-        if self.velocity.length() > 0.0 {
-            self.velocity = self.velocity.normalize() * DESIRED_SPEED;
-        }
+        self.velocity += steering * dt * SIM_SPEED;
         self.velocity = self.velocity.clamp_length_max(MAX_SPEED);
 
         // Position math
         self.position += self.velocity * dt * SIM_SPEED;
+        self.wrap_screen()
+    }
 
+    fn wrap_screen(&mut self) {
         if self.position.x > screen_width() {
             self.position.x = 0.0;
         }
@@ -122,7 +143,7 @@ async fn main() {
 
     let mut boids = vec![];
 
-    for _ in 0..100 {
+    for _ in 0..200 {
         let x: f32 = rng.random_range(0.0..screen_width());
         let y: f32 = rng.random_range(0.0..screen_height());
         boids.push(Boid::new(
