@@ -8,8 +8,8 @@ const MAX_FORCE: f32 = 40.0;
 
 const BOIDS: usize = 500;
 
-const SEPARATION_WEIGHT: f32 = 1.4;
-const ALIGNMENT_WEIGHT: f32 = 0.8;
+const SEPARATION_WEIGHT: f32 = 1.7;
+const ALIGNMENT_WEIGHT: f32 = 0.6;
 const COHESION_WEIGHT: f32 = 1.2;
 
 const SEPARATION_RADIUS: f32 = 25.0;
@@ -42,19 +42,18 @@ impl Boid {
         vel_avg: &mut Vec2,
         close_d: &mut Vec2,
     ) -> Vec2 {
-        let mut diff = self.position - other.position;
+        let diff = self.position - other.position;
         let dist_sq = diff.length_squared();
-	if dist_sq < 0.01 {
-	    return Vec2::ZERO;
-	}
+        if dist_sq < 0.01 {
+            return Vec2::ZERO;
+        }
 
         if dist_sq >= PERCEPTION_RADIUS_SQ {
             return Vec2::ZERO;
         }
         if dist_sq < SEPARATION_RADIUS_SQ {
             *close_d += self.position - other.position;
-        }
-	else if dist_sq < PERCEPTION_RADIUS_SQ {
+        } else if dist_sq < PERCEPTION_RADIUS_SQ {
             *pos_avg += other.position;
             *vel_avg += other.velocity;
             self.neighbors += 1;
@@ -72,25 +71,25 @@ impl Boid {
         for boid in snapshot {
             self.do_compute(boid, &mut pos_avg, &mut vel_avg, &mut close_d);
         }
-	
-	let mut acceleration = Vec2::ZERO;
 
-	if close_d.length_squared() > 0.0 {
+        let mut acceleration = Vec2::ZERO;
+
+        if close_d.length_squared() > 0.0 {
             acceleration += close_d.normalize() * SEPARATION_WEIGHT;
-	}
+        }
 
         if self.neighbors > 0 {
             pos_avg /= self.neighbors as f32;
             vel_avg /= self.neighbors as f32;
 
-	    let cohesion = (pos_avg - self.position).normalize() * COHESION_WEIGHT;
-	    let alignment = (vel_avg - self.velocity).normalize() * ALIGNMENT_WEIGHT;
+            let cohesion = (pos_avg - self.position).normalize() * COHESION_WEIGHT;
+            let alignment = (vel_avg - self.velocity).normalize() * ALIGNMENT_WEIGHT;
 
-	    acceleration += cohesion.clamp_length(0.0, MAX_FORCE);
+            acceleration += cohesion.clamp_length(0.0, MAX_FORCE);
             acceleration += alignment.clamp_length(0.0, MAX_FORCE);
         }
 
-	self.velocity += acceleration;
+        self.velocity += acceleration;
         self.velocity = self.velocity.clamp_length(MIN_SPEED, MAX_SPEED);
         self.position += self.velocity * dt * SIM_SPEED;
         self.draw();
