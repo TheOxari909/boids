@@ -5,11 +5,11 @@ use rand::prelude::*;
 const MAX_SPEED: f32 = 10.0;
 const MAX_FORCE: f32 = 50.0;
 const DESIRED_SPEED: f32 = 7.0;
-const SEPARATION_WEIGHT: f32 = 10.5;
+const SEPARATION_WEIGHT: f32 = 15.0;
 const ALIGNMENT_WEIGHT: f32 = 1.0;
-const COHESION_WEIGHT: f32 = 1.0;
+const COHESION_WEIGHT: f32 = 10.0;
 const PERCEPTION_RADIUS: f32 = 75.0;
-const SIM_SPEED: f32 = 12.0;
+const SIM_SPEED: f32 = 20.0;
 
 #[derive(Clone)]
 struct Boid {
@@ -38,8 +38,22 @@ impl Boid {
     }
 
     fn calculate_alignment(&self, boids: &[Boid]) -> Vec2 {
-        // Implementation here
-        Vec2::new(0.0, 0.0)
+        let mut count = 0;
+        let mut sum_vel = Vec2::ZERO;
+
+        for boid in boids {
+            let dist = self.position.distance(boid.position);
+            if dist > 0.0 && dist < PERCEPTION_RADIUS {
+                sum_vel += boid.velocity;
+                count += 1;
+            }
+        }
+        if count > 0 {
+            let average_vel = sum_vel / count as f32;
+            return average_vel - self.velocity;
+        }
+
+        Vec2::ZERO
     }
 
     fn calculate_cohesion(&self, boids: &[Boid]) -> Vec2 {
@@ -108,7 +122,7 @@ async fn main() {
 
     let mut boids = vec![];
 
-    for _ in 0..50 {
+    for _ in 0..100 {
         let x: f32 = rng.random_range(0.0..screen_width());
         let y: f32 = rng.random_range(0.0..screen_height());
         boids.push(Boid::new(
