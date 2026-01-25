@@ -2,15 +2,20 @@ extern crate rand;
 use macroquad::prelude::*;
 use rand::prelude::*;
 
-const MAX_SPEED: f32 = 200.0;
-const MAX_FORCE: f32 = 100.0;
+const MAX_SPEED: f32 = 300.0;
+const MIN_SPEED: f32 = 150.0;
+const MAX_FORCE: f32 = 40.0;
 
-const SEPARATION_WEIGHT: f32 = 1.5;
-const ALIGNMENT_WEIGHT: f32 = 1.0;
-const COHESION_WEIGHT: f32 = 1.0;
+const BOIDS: usize = 500;
 
-const SEPARATION_RADIUS: f32 = 70.0;
-const PERCEPTION_RADIUS: f32 = 100.0;
+const SEPARATION_WEIGHT: f32 = 1.4;
+const ALIGNMENT_WEIGHT: f32 = 0.8;
+const COHESION_WEIGHT: f32 = 1.2;
+
+const SEPARATION_RADIUS: f32 = 25.0;
+const PERCEPTION_RADIUS: f32 = 50.0;
+const PERCEPTION_RADIUS_SQ: f32 = PERCEPTION_RADIUS * PERCEPTION_RADIUS;
+const SEPARATION_RADIUS_SQ: f32 = SEPARATION_RADIUS * SEPARATION_RADIUS;
 
 const SIM_SPEED: f32 = 1.0;
 
@@ -18,6 +23,7 @@ const SIM_SPEED: f32 = 1.0;
 struct Boid {
     position: Vec2,
     velocity: Vec2,
+    neighbors: usize,
 }
 
 impl Boid {
@@ -25,89 +31,70 @@ impl Boid {
         Boid {
             position: pos,
             velocity: vel,
+            neighbors: 0,
         }
     }
 
-    fn calculate_separation(&self, snapshot: &[Boid]) -> Vec2 {
-        let mut count = 0;
-        let mut steer = Vec2::ZERO;
+    fn do_compute(
+        &mut self,
+        other: &Boid,
+        pos_avg: &mut Vec2,
+        vel_avg: &mut Vec2,
+        close_d: &mut Vec2,
+    ) -> Vec2 {
+        let mut diff = self.position - other.position;
+        let dist_sq = diff.length_squared();
+	if dist_sq < 0.01 {
+	    return Vec2::ZERO;
+	}
 
-        for other in snapshot {
-            let delta = self.position - other.position;
-            let dist = delta.length();
-
-            if dist > 0.0 && dist < SEPARATION_RADIUS {
-                steer -= delta.normalize();
-                count += 1;
-            }
+        if dist_sq >= PERCEPTION_RADIUS_SQ {
+            return Vec2::ZERO;
         }
-
-        if count > 0 {
-            return steer;
+        if dist_sq < SEPARATION_RADIUS_SQ {
+            *close_d += self.position - other.position;
         }
-
-        Vec2::ZERO
-    }
-
-    fn calculate_alignment(&self, boids: &[Boid]) -> Vec2 {
-        let mut count = 0.0;
-        let mut vel_avg = Vec2::ZERO;
-
-        for other in boids {
-            let dist = self.position.distance(other.position);
-
-            if dist > SEPARATION_RADIUS && dist < PERCEPTION_RADIUS {
-                vel_avg += other.velocity;
-                count += 1.0;
-            }
-        }
-
-        if count > 0.0 {
-            vel_avg.x /= count;
-            vel_avg.y /= count;
-            return vel_avg;
-        }
-
-        Vec2::ZERO
-    }
-
-    fn calculate_cohesion(&self, boids: &[Boid]) -> Vec2 {
-        let mut count = 0.0;
-        let mut pos_avg = Vec2::ZERO;
-
-        for other in boids {
-            let dist = self.position.distance(other.position);
-
-            if dist > SEPARATION_RADIUS && dist < PERCEPTION_RADIUS {
-                pos_avg += other.position;
-                count += 1.0;
-            }
-        }
-
-        if count > 0.0 {
-            pos_avg.x /= count;
-            pos_avg.y /= count;
-            return pos_avg;
+	else if dist_sq < PERCEPTION_RADIUS_SQ {
+            *pos_avg += other.position;
+            *vel_avg += other.velocity;
+            self.neighbors += 1;
         }
 
         Vec2::ZERO
     }
 
     fn update(&mut self, dt: f32, snapshot: &[Boid]) {
-        let separation = self.calculate_separation(snapshot);
-        let alignment = self.calculate_alignment(snapshot);
-        let cohesion = self.calculate_cohesion(snapshot);
+        let mut pos_avg = Vec2::ZERO;
+        let mut vel_avg = Vec2::ZERO;
+        let mut close_d = Vec2::ZERO;
+        self.neighbors = 0;
 
-        // Steering force & acceleration
-        let steering = (separation * SEPARATION_WEIGHT)
-            + (alignment * ALIGNMENT_WEIGHT)
-            + (cohesion * COHESION_WEIGHT);
-        self.velocity += steering * dt * SIM_SPEED;
-        self.velocity = self.velocity.clamp_length_max(MAX_SPEED);
+        for boid in snapshot {
+            self.do_compute(boid, &mut pos_avg, &mut vel_avg, &mut close_d);
+        }
+	
+	let mut acceleration = Vec2::ZERO;
 
-        // Position math
+	if close_d.length_squared() > 0.0 {
+            acceleration += close_d.normalize() * SEPARATION_WEIGHT;
+	}
+
+        if self.neighbors > 0 {
+            pos_avg /= self.neighbors as f32;
+            vel_avg /= self.neighbors as f32;
+
+	    let cohesion = (pos_avg - self.position).normalize() * COHESION_WEIGHT;
+	    let alignment = (vel_avg - self.velocity).normalize() * ALIGNMENT_WEIGHT;
+
+	    acceleration += cohesion.clamp_length(0.0, MAX_FORCE);
+            acceleration += alignment.clamp_length(0.0, MAX_FORCE);
+        }
+
+	self.velocity += acceleration;
+        self.velocity = self.velocity.clamp_length(MIN_SPEED, MAX_SPEED);
         self.position += self.velocity * dt * SIM_SPEED;
-        self.wrap_screen()
+        self.draw();
+        self.wrap_screen();
     }
 
     fn wrap_screen(&mut self) {
@@ -143,7 +130,7 @@ async fn main() {
 
     let mut boids = vec![];
 
-    for _ in 0..200 {
+    for _ in 0..BOIDS {
         let x: f32 = rng.random_range(0.0..screen_width());
         let y: f32 = rng.random_range(0.0..screen_height());
         boids.push(Boid::new(
@@ -164,9 +151,7 @@ async fn main() {
 
         for boid in &mut boids {
             boid.update(delta, &snapshot);
-            boid.draw();
         }
-
         next_frame().await;
     }
 }
