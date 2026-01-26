@@ -4,18 +4,18 @@ use rand::prelude::*;
 
 const MAX_SPEED: f32 = 250.0;
 const MIN_SPEED: f32 = 200.0;
-const MAX_FORCE: f32 = 4.0;
-const MARGINS: f32 = 0.2;
+const MAX_FORCE: f32 = 6.0;
+const MARGINS: f32 = 0.1;
 const TURN_FACTOR: f32 = 4.0;
 
 const BOIDS: usize = 1000;
 
-const SEPARATION_WEIGHT: f32 = 1.7;
-const ALIGNMENT_WEIGHT: f32 = 0.8;
-const COHESION_WEIGHT: f32 = 1.0;
+const SEPARATION_WEIGHT: f32 = 1.5;
+const ALIGNMENT_WEIGHT: f32 = 0.6;
+const COHESION_WEIGHT: f32 = 0.8;
 
 const SEPARATION_RADIUS: f32 = 25.0;
-const PERCEPTION_RADIUS: f32 = 50.0;
+const PERCEPTION_RADIUS: f32 = 60.0;
 
 const SIM_SPEED: f32 = 1.0;
 
@@ -77,11 +77,11 @@ impl Boid {
         }
 
         let mut rng = rand::rng();
-        self.wander_angle += rng.random_range(-0.5..0.5);
+        self.wander_angle += rng.random_range(-0.2..0.2);
 
         let wander_vec = Vec2::from_angle(self.wander_angle) * 100.0;
         let mut wander_force = self.steer(wander_vec);
-        wander_force *= 0.5;
+        wander_force *= 0.2;
         self.acceleration += wander_force;
 
         let turn_force = self.turn_around();
@@ -90,7 +90,6 @@ impl Boid {
         self.velocity += self.acceleration;
         self.velocity = self.velocity.clamp_length(MIN_SPEED, MAX_SPEED);
         self.position += self.velocity * dt * SIM_SPEED;
-        self.draw();
     }
 
     fn turn_around(&mut self) -> Vec2 {
@@ -168,6 +167,7 @@ async fn main() {
 
         for boid in &mut boids {
             boid.update(delta, &snapshot);
+            boid.draw();
         }
 
         draw_text(
